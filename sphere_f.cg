@@ -1,0 +1,10 @@
+void main(
+    float4 vColor: COLOR0,
+    float4 vColor2 : COLOR1,
+    float2 vTexCoord : TEXCOORD0,
+    uniform sampler2D tex,
+    uniform float4 uColorFrg,
+    out float4 oColor : COLOR)
+{
+    oColor = tex2D(tex, vTexCoord) * vColor * (uColorFrg + vColor2);
+}
