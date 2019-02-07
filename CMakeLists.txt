@@ -80,4 +80,5 @@ vita_create_vpk(${PROJECT_NAME}.vpk ${VITA_TITLEID} ${PROJECT_NAME}.self
   FILE sphere_f.gxp sphere_f.gxp
   FILE sphere_v.gxp sphere_v.gxp
   FILE Tomarchio_256.png Tomarchio_256.png
+  FILE stb_font_SourceSansProSemiBold.png stb_font_SourceSansProSemiBold.png
 )

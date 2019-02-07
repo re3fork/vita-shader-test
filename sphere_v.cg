@@ -1,16 +1,21 @@
 void main(
-    float2 aPosition,
+    float3 aPosition,
     float2 aTexCoord,
-    float4 aColor,
     float4 out vPosition : POSITION,
-    float2 out vTexCoord : TEXCOORD0,
     float4 out vColor : COLOR0,
-    float4 out vColor2 : COLOR1,
-    uniform float4 uColorVtx,
+    float2 out vTexCoord : TEXCOORD0,
+    float2 out vBorder : TEXCOORD1,
+    uniform float4 uColor,
+    uniform float4 uTransform,
     uniform float4x4 uProjection)
 {
-    vPosition = mul(float4(aPosition, 0.5, 1.0), uProjection);
+    float2 p = float2(aPosition.x * uTransform.z + uTransform.x,
+                      aPosition.y * uTransform.w + uTransform.y);
+    vPosition = mul(float4(p, 0.5, 1.0), uProjection);
     vTexCoord = aTexCoord;
-    vColor = aColor;
-    vColor2 = uColorVtx;
+    vColor = uColor; // TODO: applySaturation()
+
+    // The bigger the text scale, the smaller we have to make the alpha border
+    float e = 0.05 / aPosition.z;
+    vBorder = float2(0.5 - e, 0.5 + e);
 }

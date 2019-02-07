@@ -50,12 +50,9 @@ dump_program(SceGxmProgram *program)
 struct Vertex {
     float x;
     float y;
+    float z;
     float u;
     float v;
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-    uint8_t a;
 };
 
 int main(int argc, char *argv[]) {
@@ -80,102 +77,134 @@ int main(int argc, char *argv[]) {
 
         vita2d_init();
 
-        vita2d_texture *texture = vita2d_load_PNG_file("app0:/Tomarchio_256.png");
+        vita2d_texture *texture = vita2d_load_PNG_file("app0:/stb_font_SourceSansProSemiBold.png");
+        vita2d_texture_set_filters(texture, SCE_GXM_TEXTURE_FILTER_LINEAR, SCE_GXM_TEXTURE_FILTER_LINEAR);
 
         SceGxmContext *gxmContext = vita2d_get_context();
         SceGxmShaderPatcher *shader_patcher = vita2d_get_shader_patcher();
 
-        vitashader::ShaderProgram program(gxmContext, shader_patcher, sphere_v, sphere_f);
+        {
+            vitashader::ShaderProgram program(gxmContext, shader_patcher, sphere_v, sphere_f);
 
-        program.add_attribute("aPosition", 2, SCE_GXM_ATTRIBUTE_FORMAT_F32);
-        program.add_attribute("aTexCoord", 2, SCE_GXM_ATTRIBUTE_FORMAT_F32);
-        program.add_attribute("aColor", 4, SCE_GXM_ATTRIBUTE_FORMAT_U8N);
+            program.add_attribute("aPosition", 3, SCE_GXM_ATTRIBUTE_FORMAT_F32);
+            program.add_attribute("aTexCoord", 2, SCE_GXM_ATTRIBUTE_FORMAT_F32);
 
-        auto uColorFrg = program.get_fragment_uniform("uColorFrg");
-        auto uColorVtx = program.get_vertex_uniform("uColorVtx");
-        auto uProjection = program.get_vertex_uniform("uProjection");
+            auto uColor = program.get_vertex_uniform("uColor");
+            auto uTransform = program.get_vertex_uniform("uTransform");
+            auto uProjection = program.get_vertex_uniform("uProjection");
+            auto uShadowOffset = program.get_fragment_uniform("uShadowOffset");
 
-        static const SceGxmBlendInfo blend_info = {
-            .colorMask = SCE_GXM_COLOR_MASK_ALL,
-            .colorFunc = SCE_GXM_BLEND_FUNC_ADD,
-            .alphaFunc = SCE_GXM_BLEND_FUNC_ADD,
-            .colorSrc  = SCE_GXM_BLEND_FACTOR_SRC_ALPHA,
-            .colorDst  = SCE_GXM_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-            .alphaSrc  = SCE_GXM_BLEND_FACTOR_SRC_ALPHA,
-            .alphaDst  = SCE_GXM_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-        };
+            static const SceGxmBlendInfo blend_info = {
+                .colorMask = SCE_GXM_COLOR_MASK_ALL,
+                .colorFunc = SCE_GXM_BLEND_FUNC_ADD,
+                .alphaFunc = SCE_GXM_BLEND_FUNC_ADD,
+                .colorSrc  = SCE_GXM_BLEND_FACTOR_SRC_ALPHA,
+                .colorDst  = SCE_GXM_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                .alphaSrc  = SCE_GXM_BLEND_FACTOR_SRC_ALPHA,
+                .alphaDst  = SCE_GXM_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+            };
 
-        auto pprogram = program.create(SCE_GXM_MULTISAMPLE_NONE, &blend_info);
+            auto pprogram = program.create(SCE_GXM_MULTISAMPLE_NONE, &blend_info);
 
-        int idx = 0;
+            int idx = 0;
 
-        while (1) {
-            sceCtrlPeekBufferPositive(0, &pad, 1);
+            float dx = 0.f, dy = 0.f;
+            float sx = 1.f, sy = 1.f;
 
-            if (pad.buttons & SCE_CTRL_START) {
-                break;
-            }
+            while (1) {
+                sceCtrlPeekBufferPositive(0, &pad, 1);
 
-            vita2d_set_clear_color(RGBA8(0x40, 0x40, 0x40, 0xFF));
-            vita2d_start_drawing();
-            vita2d_clear_screen();
-
-            int n = 4;
-            Vertex *vertices = (Vertex *)vita2d_pool_memalign(n * sizeof(Vertex), sizeof(Vertex));
-
-            Vertex *v = vertices;
-            v->x = 0.f; v->y = 0.f; ++v;
-            v->x = 0.f; v->y = 1.f; ++v;
-            v->x = 1.f; v->y = 0.f; ++v;
-            v->x = 1.f; v->y = 1.f; ++v;
-
-            for (int i=0; i<n; ++i) {
-                vertices[i].r = vertices[i].g = vertices[i].b = vertices[i].a = 255;
-                if (i%2 == 0) {
-                    vertices[i].a = 0;
+                if (pad.buttons & SCE_CTRL_START) {
+                    break;
                 }
 
-                vertices[i].u = vertices[i].x;
-                vertices[i].v = vertices[i].y;
-                vertices[i].x = pad.lx + vertices[i].x * 100.f;
-                vertices[i].y = pad.ly + vertices[i].y * 100.f;
+                if (pad.buttons & SCE_CTRL_SELECT) {
+                    dx = dy = 0.f;
+                    sx = sy = 1.f;
+                }
+
+                vita2d_set_clear_color(RGBA8(0x40, 0x40, 0x40, 0xFF));
+                vita2d_start_drawing();
+                vita2d_clear_screen();
+
+                int n = 4;
+                Vertex *vertices = (Vertex *)vita2d_pool_memalign(n * sizeof(Vertex), sizeof(Vertex));
+
+                Vertex *v = vertices;
+                v->x = 0.f; v->y = 0.f; ++v;
+                v->x = 0.f; v->y = 1.f; ++v;
+                v->x = 1.f; v->y = 0.f; ++v;
+                v->x = 1.f; v->y = 1.f; ++v;
+
+                float lxf = ((int)pad.lx - 127) / 127.f;
+                float lyf = ((int)pad.ly - 127) / 127.f;
+                float rxf = ((int)pad.rx - 127) / 127.f;
+                float ryf = ((int)pad.ry - 127) / 127.f;
+
+                if (fabsf(lxf) > 0.2f) {
+                    dx += 2.f * lxf;
+                }
+                if (fabsf(lyf) > 0.2f) {
+                    dy += 2.f * lyf;
+                }
+                if (fabsf(rxf) > 0.2f) {
+                    sx *= 1.f + 0.2f * rxf;
+                }
+                if (fabsf(ryf) > 0.2f) {
+                    sy *= 1.f + 0.2f * ryf;
+                }
+
+                for (int i=0; i<n; ++i) {
+                    vertices[i].u = vertices[i].x;
+                    vertices[i].v = vertices[i].y;
+                    vertices[i].x = vertices[i].x * 900.f;
+                    vertices[i].y = vertices[i].y * 900.f;
+                    vertices[i].z = (sx + sy) / 2.f;
+                }
+
+                uint16_t *indices = (uint16_t *)vita2d_pool_memalign(n * sizeof(uint16_t), sizeof(uint16_t));
+                indices[0] = 0;
+                indices[1] = 1;
+                indices[2] = 2;
+                indices[3] = 3;
+
+                pprogram.use(gxmContext);
+
+                sceGxmSetBackPolygonMode(gxmContext, SCE_GXM_POLYGON_MODE_TRIANGLE_FILL);
+
+                float color[] = { 0.5f, 1.f, 1.f, 1.0f, };
+                color[1] = (idx % 100) / 100.f;
+                uColor.set_float(color, 4);
+
+                float transform[] = {
+                    dx, dy,
+                    sx, sy,
+                };
+                uTransform.set_float(transform, 4);
+
+                float shadow_offset[] = { 1.f / 512.f, 1.f / 512.f };
+                uShadowOffset.set_float(shadow_offset, 2);
+
+                uProjection.set_float(glm::value_ptr(glm::ortho(0.f, 960.f, 544.f, 0.f)), 16);
+
+                sceGxmSetFragmentTexture(gxmContext, 0, &texture->gxm_tex);
+                sceGxmSetVertexStream(gxmContext, 0, vertices);
+                sceGxmDraw(gxmContext, SCE_GXM_PRIMITIVE_TRIANGLE_STRIP, SCE_GXM_INDEX_FORMAT_U16, indices, n);
+
+                vita2d_wait_rendering_done();
+                vita2d_end_drawing();
+                vita2d_swap_buffers();
+
+                ++idx;
             }
-
-            uint16_t *indices = (uint16_t *)vita2d_pool_memalign(n * sizeof(uint16_t), sizeof(uint16_t));
-            indices[0] = 0;
-            indices[1] = 1;
-            indices[2] = 2;
-            indices[3] = 3;
-
-            pprogram.use(gxmContext);
-
-            sceGxmSetBackPolygonMode(gxmContext, SCE_GXM_POLYGON_MODE_TRIANGLE_FILL);
-
-            float color[] = { 0.5f, 1.f, 0.f, 0.5f, };
-            color[1] = (idx % 100) / 100.f;
-            uColorFrg.set_float(color, 4);
-
-            float color2[] = { 0.5f, 0.f, 1.f, 0.5f, };
-            color2[2] = (idx % 200) / 200.f;
-            uColorVtx.set_float(color2, 4);
-
-            uProjection.set_float(glm::value_ptr(glm::ortho(0.f, 960.f, 544.f, 0.f)), 16);
-
-            sceGxmSetFragmentTexture(gxmContext, 0, &texture->gxm_tex);
-            sceGxmSetVertexStream(gxmContext, 0, vertices);
-            sceGxmDraw(gxmContext, SCE_GXM_PRIMITIVE_TRIANGLE_STRIP, SCE_GXM_INDEX_FORMAT_U16, indices, n);
-
-            vita2d_end_drawing();
-            vita2d_swap_buffers();
-
-            ++idx;
         }
+
+        vita2d_wait_rendering_done();
+        vita2d_free_texture(texture);
+        vita2d_fini();
 
         free(sphere_f);
         free(sphere_v);
-
-        vita2d_free_texture(texture);
-        vita2d_fini();
 
         sceKernelExitProcess(0);
         return 0;
