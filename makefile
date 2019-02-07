@@ -1,4 +1,4 @@
-SHACC := vitasdk-docker shacc
+SHACC := shacc
 
 OUTPUTS := sphere_f.gxp sphere_v.gxp
 
